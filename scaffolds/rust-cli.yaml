@@ -1,0 +1,107 @@
+preset: rust-cli
+files:
+  - path: Cargo.toml
+    contents: |
+      [package]
+      name = "{{name}}"
+      version = "0.1.0"
+      edition = "2024"
+      license = "MIT"
+
+      [dependencies]
+  - path: src/main.rs
+    contents: |
+      fn main() {
+          println!("{{name}}");
+      }
+  - path: README.md
+    contents: |
+      # {{name}}
+
+      {{description}}
+
+      ## Development
+
+      - `just check`: run `cargo check --all-targets`
+      - `just lint`: run `cargo clippy --all-targets -- -D warnings`
+      - `just test`: run `cargo test`
+      - `just gate`: run format, lint, and test gates
+  - path: CLAUDE.md
+    contents: |
+      # CLAUDE.md
+
+      Guidance for working on `{{name}}`.
+
+      ## Project
+
+      {{description}}
+
+      ## Commands
+
+      - `just fmt`: format Rust code
+      - `just fmt-check`: verify Rust formatting
+      - `just check`: run `cargo check --all-targets`
+      - `just lint`: run `cargo clippy --all-targets -- -D warnings`
+      - `just test`: run `cargo test`
+      - `just gate`: run the full local validation gate
+
+      ## Conventions
+
+      - Rust edition 2024.
+      - Treat warnings as errors with `cargo clippy -- -D warnings`.
+      - Prefer small modules and explicit domain boundaries.
+      - Do not commit secrets or machine-local files.
+  - path: Justfile
+    contents: |
+      default:
+          just --list
+
+      fmt:
+          cargo fmt --all
+
+      fmt-check:
+          cargo fmt --all --check
+
+      check:
+          cargo check --all-targets
+
+      lint:
+          cargo clippy --all-targets -- -D warnings
+
+      test:
+          cargo test
+
+      gate: fmt-check check lint test
+  - path: .gitignore
+    contents: |
+      /target
+      .DS_Store
+      .pytest_cache
+      .ruff_cache
+      .venv
+      .env
+      .env.*
+      !.env.example
+      .ctx/*.state.yaml
+      .ctx/HANDOFF.*.state.yaml
+
+      # handoff-begin
+      .ctx/*
+      !.ctx/HANDOFF.yaml
+      !.ctx/HANDOFF.*.yaml
+      .ctx/HANDOFF.*.*.yaml
+      .ctx/HANDOFF.*.state.yaml
+      .ctx/HANDOFF.*.state.json
+      !.ctx/handoff.*.config.toml.example
+      .ctx/HANDOFF.*.*.state.json
+      .ctx/HANDOFF.hj.hj.state.json
+      .ctx/.initialized
+      # handoff-end
+  - path: .ctx/HANDOFF.yaml
+    contents: |
+      project: {{name}}
+      updated: null
+      notes: >
+        {{description}}
+      items: []
+      log: []

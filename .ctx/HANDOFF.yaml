@@ -1,0 +1,6 @@
+project: sparkfile
+updated: null
+notes: >
+  Rust CLI that scaffolds new projects with consistent workspace conventions.
+items: []
+log: []
