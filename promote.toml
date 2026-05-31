@@ -1,3 +1,5 @@
+autobump = "patch"
+
 [registries.cratebox]
 cargo_name = "cratebox"
 confirm = false
