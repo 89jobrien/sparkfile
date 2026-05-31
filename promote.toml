@@ -1,0 +1,6 @@
+[registries.cratebox]
+cargo_name = "cratebox"
+confirm = false
+
+[pipelines.default]
+stages = ["cratebox"]

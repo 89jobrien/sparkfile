@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-promote
+        run: cargo install --git https://github.com/89jobrien/cargo-promote
+
+      - name: Publish to cratebox
+        run: cargo-promote publish --allow-dirty
+        env:
+          CARGO_REGISTRIES_CRATEBOX_INDEX: "sparse+http://100.105.75.7:3000/api/packages/joe/cargo/"
+          CARGO_REGISTRIES_CRATEBOX_TOKEN: ${{ secrets.CRATEBOX_TOKEN }}
