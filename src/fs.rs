@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crate::scaffold::FileEntry;
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WriteError {
     Conflict(PathBuf),

@@ -1,10 +1,12 @@
 use std::path::PathBuf;
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Preset {
     RustCli,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectSpec {
     pub name: String,
@@ -13,6 +15,7 @@ pub struct ProjectSpec {
     pub root: PathBuf,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpecError {
     InvalidName(String),
