@@ -140,3 +140,114 @@ impl std::fmt::Display for CliError {
 }
 
 impl std::error::Error for CliError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unique_dir_name(prefix: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .subsec_nanos();
+        std::env::temp_dir().join(format!("{prefix}-{nanos}"))
+    }
+
+    // run() happy path — returns Ok(RunSummary) with expected name and files.
+    #[test]
+    fn run_happy_path() {
+        let root = unique_dir_name("sparkfile-happy");
+        let result = run(["new", "rust-cli", "my-tool", "--root", root.to_str().unwrap()]);
+        // Clean up regardless of outcome.
+        let _ = std::fs::remove_dir_all(&root);
+
+        let summary = result.expect("run() should succeed");
+        assert_eq!(summary.name, "my-tool");
+        assert_eq!(summary.target_dir, root.join("my-tool"));
+        assert!(!summary.files.is_empty(), "at least one file must be generated");
+        for path in &summary.files {
+            assert!(
+                path.starts_with(&summary.target_dir),
+                "file {path:?} should be under target dir"
+            );
+        }
+    }
+
+    // run() with --help flag returns Err(CliError::Usage).
+    #[test]
+    fn run_help_flag() {
+        let err = run(["--help"]).expect_err("--help must return an error");
+        assert!(
+            matches!(err, CliError::Usage(_)),
+            "expected Usage, got {err:?}"
+        );
+    }
+
+    // run() with an unknown preset returns Err(CliError::UnknownPreset).
+    #[test]
+    fn run_unknown_preset() {
+        let err = run(["new", "no-such-preset", "my-tool"])
+            .expect_err("unknown preset must return an error");
+        assert!(
+            matches!(err, CliError::UnknownPreset(ref s) if s == "no-such-preset"),
+            "expected UnknownPreset(\"no-such-preset\"), got {err:?}"
+        );
+    }
+
+    // run() with no name arg returns Err(CliError::Usage).
+    #[test]
+    fn run_missing_name() {
+        let err = run(["new", "rust-cli"]).expect_err("missing name must return an error");
+        assert!(
+            matches!(err, CliError::Usage(_)),
+            "expected Usage, got {err:?}"
+        );
+    }
+
+    // run() with --description override reflects the override in the summary name
+    // (the description field is not part of RunSummary, but the name must still be correct).
+    #[test]
+    fn run_description_override() {
+        let root = unique_dir_name("sparkfile-desc");
+        let result = run([
+            "new",
+            "rust-cli",
+            "desc-tool",
+            "--description",
+            "A custom description.",
+            "--root",
+            root.to_str().unwrap(),
+        ]);
+        let _ = std::fs::remove_dir_all(&root);
+
+        let summary = result.expect("run() with --description should succeed");
+        assert_eq!(summary.name, "desc-tool");
+    }
+
+    // run() with --root pointing at a temp dir puts the target_dir under that root.
+    #[test]
+    fn run_root_override() {
+        let root = unique_dir_name("sparkfile-root");
+        let result = run(["new", "rust-cli", "rooted", "--root", root.to_str().unwrap()]);
+        let _ = std::fs::remove_dir_all(&root);
+
+        let summary = result.expect("run() with --root should succeed");
+        assert_eq!(summary.target_dir, root.join("rooted"));
+    }
+
+    // display_path() strips the target_dir prefix when the path is inside it.
+    #[test]
+    fn display_path_strips_prefix() {
+        let target = PathBuf::from("/tmp/workspace/my-tool");
+        let file = target.join("src/main.rs");
+        assert_eq!(display_path(&file, &target), "src/main.rs");
+    }
+
+    // display_path() falls back to the full path when the file is outside target_dir.
+    #[test]
+    fn display_path_fallback_outside_target() {
+        let target = PathBuf::from("/tmp/workspace/my-tool");
+        let outside = PathBuf::from("/tmp/other/file.txt");
+        assert_eq!(display_path(&outside, &target), "/tmp/other/file.txt");
+    }
+}
