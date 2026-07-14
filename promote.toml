@@ -4,5 +4,12 @@ autobump = "patch"
 cargo_name = "cratebox"
 confirm = false
 
+[registries.crates-io]
+confirm = true
+
 [pipelines.default]
-stages = ["cratebox"]
+stages = ["cratebox", "crates-io"]
+
+[pipeline]
+stages = ["development", "testing", "staging", "production"]
+release_branch = "production"
