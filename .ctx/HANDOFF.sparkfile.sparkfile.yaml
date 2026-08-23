@@ -1,0 +1,37 @@
+project: sparkfile
+id: sparkfi
+updated: 2026-08-23
+branch: chore/promote-pipeline-stages
+head_sha: 212d052330c028ee65d1c207ed3de4468b6f1c4c
+commits_since_main: 1
+upstream: github/chore/promote-pipeline-stages (up to date)
+dirty: true
+dirty_summary: |-
+  18 lines added across 6 files (development TODOs + .kgx in .gitignore):
+  - .ctx/HANDOFF.sparkfile.sparkfile.yaml: +5 lines (HANDOFF metadata)
+  - .gitignore: +2 lines (.kgx entry)
+  - Cargo.toml: +2 lines (TODO comments: description/repo fields, serde_yaml migration)
+  - src/domain.rs: +2 lines (TODO comments: RustLib/GoCli/NuScript presets, TryFrom impl)
+  - src/main.rs: +4 lines (TODO comments: list subcommand, --dry-run, --force flags, usage update)
+  - src/scaffold.rs: +3 lines (TODO comments: FileEntry relocation, --scaffold-dir support)
+
+tests_run: yes
+tests_passed: 18
+tests_summary: |-
+  cargo test: PASS
+  - src/lib.rs: 10 tests (domain, scaffold, fs modules)
+  - src/main.rs: 8 tests (CLI integration, flag parsing, path display)
+  - All passing, no failures
+
+recent_commits:
+  - 212d052: chore(promote): configure promotion stages [current HEAD]
+  - 3bdb53e: feat(domain,scaffold,fs): mark public types #[non_exhaustive] [main @ origin]
+  - f2ceb01: test(main): add coverage for run() and display_path
+  - 550fcdd: test(scaffold): add coverage for error paths and preset interpolation
+  - 9087fde: docs: add AGENTS.md for Codex CLI agent support
+
+notes: |-
+  Active branch is feature/promotion-pipeline branch with 1 commit not yet merged to main.
+  Working tree contains development TODOs (inline comments) and gitignore refresh; no functional changes.
+  All tests passing. Branch is up to date with remote tracking branch.
+  Ready for PR review/merge or further development.
