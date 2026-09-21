@@ -1,5 +1,8 @@
+//! Project presets, specifications, and name validation.
+
 use std::path::PathBuf;
 
+// TODO: add RustLib, GoCli, NuScript presets (each needs a corresponding scaffolds/*.yaml)
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Preset {
@@ -22,6 +25,8 @@ pub enum SpecError {
 }
 
 impl Preset {
+    // TODO: implement TryFrom<&str> for Preset and delegate parse() to it
+    /// Parses a supported preset name.
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "rust-cli" => Some(Self::RustCli),
@@ -29,6 +34,7 @@ impl Preset {
         }
     }
 
+    /// Returns the preset's canonical command-line name.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::RustCli => "rust-cli",
@@ -37,6 +43,7 @@ impl Preset {
 }
 
 impl ProjectSpec {
+    /// Builds a project specification after validating its name.
     pub fn new(
         name: impl Into<String>,
         description: impl Into<String>,
@@ -53,6 +60,7 @@ impl ProjectSpec {
         })
     }
 
+    /// Returns the project directory beneath the configured root.
     pub fn target_dir(&self) -> PathBuf {
         self.root.join(&self.name)
     }

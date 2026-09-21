@@ -1,9 +1,13 @@
+//! Embedded scaffold loading, validation, and template interpolation.
+
 use std::path::PathBuf;
 
 use serde::Deserialize;
 
 use crate::domain::{Preset, ProjectSpec};
 
+// TODO: move FileEntry to fs.rs — it belongs to the write layer, not the scaffold layer;
+// fs.rs currently depends on scaffold.rs to get FileEntry, which inverts the natural dependency
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileEntry {
@@ -33,12 +37,14 @@ pub enum ScaffoldError {
     },
 }
 
+/// Generates target file paths and interpolated contents for a project.
 pub fn generate(spec: &ProjectSpec) -> Result<Vec<FileEntry>, ScaffoldError> {
     let definition = definition_for(spec.preset)?;
     generate_from_definition(spec, &definition)
 }
 
 fn definition_for(preset: Preset) -> Result<ScaffoldDefinition, ScaffoldError> {
+    // TODO: support --scaffold-dir to load YAML from user-supplied paths at runtime
     match preset {
         Preset::RustCli => definition_from_yaml(include_str!("../scaffolds/rust-cli.yaml")),
     }

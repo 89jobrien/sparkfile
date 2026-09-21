@@ -75,7 +75,7 @@ All Rust code follows standard rustfmt defaults. Run `just fmt` to auto-format.
 
 ## Project Structure
 
-```
+```text
 sparkfile/
 ├── src/
 │   ├── main.rs              # CLI parsing and command wiring
@@ -138,7 +138,7 @@ sparkfile new rust-cli my-app --description "A CLI tool" --root ~/projects
 
 Format commits using conventional style:
 
-```
+```text
 <type>(<scope>): <description>
 ```
 
@@ -146,7 +146,7 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
 
 **Example:**
 
-```
+```text
 feat(scaffold): add rust-cli preset support
 fix(fs): handle existing file creation errors
 docs: update CLI usage in README

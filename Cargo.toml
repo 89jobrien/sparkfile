@@ -3,6 +3,8 @@ name = "sparkfile"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+# TODO: add description and repository fields before publishing
+# TODO: migrate serde_yaml (0.9, deprecated) to serde_yml when ready
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

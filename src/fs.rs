@@ -1,3 +1,5 @@
+//! Filesystem output for generated scaffold files.
+
 use std::path::PathBuf;
 
 use crate::scaffold::FileEntry;
@@ -9,6 +11,7 @@ pub enum WriteError {
     Io(String),
 }
 
+/// Writes a batch of generated files without overwriting existing paths.
 pub fn write_files(files: &[FileEntry]) -> Result<(), WriteError> {
     for file in files {
         if file.path.exists() {
