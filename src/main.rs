@@ -157,14 +157,23 @@ mod tests {
     #[test]
     fn run_happy_path() {
         let root = unique_dir_name("sparkfile-happy");
-        let result = run(["new", "rust-cli", "my-tool", "--root", root.to_str().unwrap()]);
+        let result = run([
+            "new",
+            "rust-cli",
+            "my-tool",
+            "--root",
+            root.to_str().unwrap(),
+        ]);
         // Clean up regardless of outcome.
         let _ = std::fs::remove_dir_all(&root);
 
         let summary = result.expect("run() should succeed");
         assert_eq!(summary.name, "my-tool");
         assert_eq!(summary.target_dir, root.join("my-tool"));
-        assert!(!summary.files.is_empty(), "at least one file must be generated");
+        assert!(
+            !summary.files.is_empty(),
+            "at least one file must be generated"
+        );
         for path in &summary.files {
             assert!(
                 path.starts_with(&summary.target_dir),
@@ -228,7 +237,13 @@ mod tests {
     #[test]
     fn run_root_override() {
         let root = unique_dir_name("sparkfile-root");
-        let result = run(["new", "rust-cli", "rooted", "--root", root.to_str().unwrap()]);
+        let result = run([
+            "new",
+            "rust-cli",
+            "rooted",
+            "--root",
+            root.to_str().unwrap(),
+        ]);
         let _ = std::fs::remove_dir_all(&root);
 
         let summary = result.expect("run() with --root should succeed");

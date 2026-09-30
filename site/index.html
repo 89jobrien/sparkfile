@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="sparkfile is a Rust CLI that scaffolds new projects from YAML presets, emitting a complete manifest, Justfile, guidance, ignore rules, and handoff context.">
+    <title>sparkfile &mdash; Project scaffolding from YAML presets</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <nav aria-label="Primary">
+      <a href="index.html" class="brand" aria-current="page">sparkfile</a>
+      <a href="#output">What it writes</a>
+      <a href="#presets">Presets</a>
+      <a href="#commands">Commands</a>
+      <a href="#modules">Modules</a>
+    </nav>
+
+    <main id="main">
+      <header class="hero">
+        <div class="hero-grid">
+          <div>
+            <span class="eyebrow reveal">Rust 2024 / YAML presets / one crate</span>
+            <h1 class="reveal">sparkfile</h1>
+            <p class="tagline reveal">Project scaffolding from YAML presets. One command emits a complete project: manifest, entry point, guidance, gate commands, ignore rules, and session context.</p>
+            <div class="actions reveal">
+              <a class="button button-primary" href="#output">See what it writes</a>
+              <a class="button" href="https://github.com/89jobrien/sparkfile">Source</a>
+            </div>
+          </div>
+          <div class="terminal reveal" aria-label="Example sparkfile session">
+            <div class="terminal-bar"><span class="label">sparkfile / first run</span></div>
+            <pre><span class="prompt">$</span> sparkfile new rust-cli kiln \
+    --description "A kiln for firing things"
+
+created kiln at ./kiln
+files:
+  - Cargo.toml
+  - src/main.rs
+  - README.md
+  - CLAUDE.md
+  - Justfile
+  - .gitignore
+  - .ctx/HANDOFF.yaml</pre>
+          </div>
+        </div>
+      </header>
+
+      <section id="output" class="reveal">
+        <h2>What it writes</h2>
+        <p>
+          The <code>rust-cli</code> preset emits seven paths. Each exists to stop
+          a decision being remade on the next project &mdash; the whole argument for
+          a scaffolding tool is that these choices were already settled.
+        </p>
+        <div class="tree">
+          <div class="tree-row is-input">
+            <span class="tree-path">scaffolds/rust-cli.yaml</span>
+            <span class="tree-why">The one authored input. Everything below is generated from it.</span>
+          </div>
+          <div class="tree-row">
+            <span class="tree-path">Cargo.toml</span>
+            <span class="tree-why">Edition 2024, MIT, empty dependency block.</span>
+          </div>
+          <div class="tree-row">
+            <span class="tree-path">src/main.rs</span>
+            <span class="tree-why">A compiling entry point, so the first command is not a build failure.</span>
+          </div>
+          <div class="tree-row">
+            <span class="tree-path">Justfile</span>
+            <span class="tree-why">fmt, check, lint, test, and a composite <code>gate</code>.</span>
+          </div>
+          <div class="tree-row">
+            <span class="tree-path">CLAUDE.md</span>
+            <span class="tree-why">Project conventions, written once instead of corrected repeatedly.</span>
+          </div>
+          <div class="tree-row">
+            <span class="tree-path">.gitignore</span>
+            <span class="tree-why">Build output, secrets, and a fenced handoff block.</span>
+          </div>
+          <div class="tree-row">
+            <span class="tree-path">.ctx/HANDOFF.yaml</span>
+            <span class="tree-why">Session state, gitignored except the source document.</span>
+          </div>
+          <div class="tree-row">
+            <span class="tree-path">README.md</span>
+            <span class="tree-why">Usage and development commands.</span>
+          </div>
+        </div>
+        <p class="note">
+          The scaffold refuses to be a template you cannot read. Every file is
+          small, commented, and meant to be edited on first use.
+        </p>
+      </section>
+
+      <section id="presets" class="reveal">
+        <h2>Presets</h2>
+        <p>
+          Presets are declared in <code>scaffolds/*.yaml</code> and enumerated in the
+          domain layer. The enum is <code>#[non_exhaustive]</code>, so adding a preset
+          is a deliberate change rather than an accident.
+        </p>
+        <div class="stat-strip">
+          <div class="stat">
+            <span class="n">rust-cli</span>
+            <span class="d">Preset available today</span>
+          </div>
+          <div class="stat">
+            <span class="n">4</span>
+            <span class="d">Modules in the crate</span>
+          </div>
+          <div class="stat">
+            <span class="n">7</span>
+            <span class="d">Files per scaffold</span>
+          </div>
+          <div class="stat">
+            <span class="n">0</span>
+            <span class="d">Framework dependencies</span>
+          </div>
+        </div>
+        <p class="note">
+          <code>RustLib</code>, <code>GoCli</code>, and <code>NuScript</code> are
+          marked for addition. None ship yet, and the CLI reports an unknown preset
+          name as an error rather than guessing.
+        </p>
+      </section>
+
+      <section id="commands" class="reveal">
+        <h2>Commands</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Command</th><th>Effect</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>sparkfile new rust-cli &lt;name&gt;</code></td>
+                <td>Scaffold into the current directory.</td>
+              </tr>
+              <tr>
+                <td><code>--description &lt;text&gt;</code></td>
+                <td>Seeds the description into README and CLAUDE.</td>
+              </tr>
+              <tr>
+                <td><code>--root &lt;path&gt;</code></td>
+                <td>Scaffold somewhere else, such as a workspace root.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">
+          Project names are validated before anything is written, so a rejected name
+          leaves no partial directory behind.
+        </p>
+      </section>
+
+      <section id="modules" class="reveal">
+        <h2>Modules</h2>
+        <p>
+          Four small modules with an explicit domain boundary, which is the same rule
+          the generated <code>CLAUDE.md</code> asks of new projects.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Module</th><th>Responsibility</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>domain</code></td><td>Presets, project specs, and name validation.</td></tr>
+              <tr><td><code>scaffold</code></td><td>Loading YAML and interpolating <code>{{name}}</code>.</td></tr>
+              <tr><td><code>fs</code></td><td>Writing generated files, with real errors.</td></tr>
+              <tr><td><code>main</code></td><td>Argument parsing and dispatch.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="reveal">
+        <p>
+          <a href="https://github.com/89jobrien/sparkfile">Source on GitHub</a> &middot;
+          MIT licensed.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

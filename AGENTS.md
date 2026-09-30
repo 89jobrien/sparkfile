@@ -2,7 +2,7 @@
 
 Sparkfile is a Rust CLI that scaffolds new projects with consistent workspace
 conventions. It generates boilerplate code, configuration files, and documentation
-based on named presets (currently `rust-cli`).
+based on named presets (`rust-cli`, `repo-site`).
 
 ## Build, Lint, and Test Commands
 
@@ -110,7 +110,7 @@ sparkfile new <preset> <name> [--description <text>] [--root <path>]
 
 **Arguments:**
 
-- `<preset>`: Preset name (currently: `rust-cli`)
+- `<preset>`: Preset name (`rust-cli`, `repo-site`)
 - `<name>`: Project name (becomes project directory and Cargo package name)
 
 **Options:**
@@ -123,6 +123,30 @@ sparkfile new <preset> <name> [--description <text>] [--root <path>]
 ```bash
 sparkfile new rust-cli my-app --description "A CLI tool" --root ~/projects
 ```
+
+## The `repo-site` preset
+
+Contract-bound to `repo-reference-site`'s `shared.css`. Two rules, both enforced
+by tests rather than by convention:
+
+- It defines **all 62 tokens** that layer references — the 61 in `shared.css`
+  plus the signature-only `--color-ink-2`. A token renamed on either side would
+  otherwise surface only at `validate-css.mjs` time, in a different repo, much
+  later.
+- Its generated `tokens.css` and `signature.css` carry **no `SHARED-LAYER`
+  sentinels**, because `assemble-css.sh` composes them around the shared layer
+  and refuses to run if they collide.
+
+It emits `@font-face` blocks for IBM Plex Sans and IBM Plex Mono, and must be
+paired with `fetch-fonts.sh` using the same three families:
+
+```bash
+bash <repo-reference-site>/scripts/fetch-fonts.sh <repo> \
+  "ibm-plex-sans:var" "ibm-plex-mono:400" "ibm-plex-mono:700"
+```
+
+A `@font-face` pointing at a file that was never fetched fails validation, not
+just the browser — that was the first end-to-end failure.
 
 ## Conventions
 

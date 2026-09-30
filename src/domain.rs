@@ -4,6 +4,8 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Preset {
     RustCli,
+    /// A GitHub Pages reference site: index, tokens, signature, workflow.
+    RepoSite,
 }
 
 #[non_exhaustive]
@@ -25,6 +27,7 @@ impl Preset {
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "rust-cli" => Some(Self::RustCli),
+            "repo-site" => Some(Self::RepoSite),
             _ => None,
         }
     }
@@ -32,6 +35,7 @@ impl Preset {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::RustCli => "rust-cli",
+            Self::RepoSite => "repo-site",
         }
     }
 }

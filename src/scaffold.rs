@@ -41,6 +41,7 @@ pub fn generate(spec: &ProjectSpec) -> Result<Vec<FileEntry>, ScaffoldError> {
 fn definition_for(preset: Preset) -> Result<ScaffoldDefinition, ScaffoldError> {
     match preset {
         Preset::RustCli => definition_from_yaml(include_str!("../scaffolds/rust-cli.yaml")),
+        Preset::RepoSite => definition_from_yaml(include_str!("../scaffolds/repo-site.yaml")),
     }
 }
 
@@ -208,5 +209,215 @@ files:
         let definition = definition_from_yaml(yaml_with_preset).expect("valid YAML");
         let files = generate_from_definition(&spec(), &definition).expect("should generate");
         assert_eq!(files[0].contents, "preset=rust-cli");
+    }
+
+    #[test]
+    fn repo_site_generates_the_site_inventory() {
+        let spec = ProjectSpec::new(
+            "kiln",
+            "A CLI for firing things.",
+            Preset::RepoSite,
+            "/tmp/dev",
+        )
+        .expect("valid spec");
+
+        let files = generate(&spec).expect("repo-site scaffold should generate");
+        let paths: Vec<String> = files
+            .iter()
+            .map(|f| {
+                f.path
+                    .strip_prefix("/tmp/dev/kiln")
+                    .expect("generated under target")
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+
+        assert_eq!(
+            paths,
+            vec![
+                "site/index.html",
+                "site/tokens.css",
+                "site/signature.css",
+                "site/.nojekyll",
+                ".github/workflows/pages.yml",
+            ]
+        );
+    }
+
+    /// The shared layer references 61 tokens and the signature needs
+    /// `--color-ink-2`, so the generated tokens file must define all 62 or the
+    /// site fails validation for an undefined variable. This test is the reason
+    /// the template cannot silently drift from the shared layer.
+    #[test]
+    fn repo_site_tokens_define_every_shared_token() {
+        let spec =
+            ProjectSpec::new("kiln", "A CLI.", Preset::RepoSite, "/tmp/dev").expect("valid spec");
+        let files = generate(&spec).expect("scaffold should generate");
+        let tokens = files
+            .iter()
+            .find(|f| f.path.ends_with("tokens.css"))
+            .expect("tokens.css should be generated");
+
+        let defined: std::collections::HashSet<&str> = tokens
+            .contents
+            .match_indices("--")
+            .map(|(i, _)| &tokens.contents[i..])
+            .filter_map(|rest| rest.split_once(':').map(|(name, _)| name))
+            .collect();
+
+        let expected = [
+            "--atmosphere-image",
+            "--atmosphere-size",
+            "--brand-tracking",
+            "--color-accent",
+            "--color-accent-fg",
+            "--color-accent-hover",
+            "--color-bg",
+            "--color-border",
+            "--color-border-strong",
+            "--color-code-bg",
+            "--color-code-fg",
+            "--color-dot-1",
+            "--color-dot-2",
+            "--color-dot-3",
+            "--color-fg",
+            "--color-fg-muted",
+            "--color-focus",
+            "--color-ink-2",
+            "--color-nav-bg",
+            "--color-note-bg",
+            "--color-pill-neutral-bg",
+            "--color-row-hover",
+            "--color-signal-err",
+            "--color-signal-err-bg",
+            "--color-signal-ok",
+            "--color-signal-ok-bg",
+            "--color-signal-warn",
+            "--color-signal-warn-bg",
+            "--color-surface",
+            "--color-surface-raised",
+            "--color-surface-sunken",
+            "--color-terminal-bg",
+            "--color-terminal-fg",
+            "--content-width",
+            "--content-width-narrow",
+            "--display-tracking",
+            "--display-tracking-body",
+            "--font-body",
+            "--font-body-strong",
+            "--font-body-weight",
+            "--font-display",
+            "--font-display-weight",
+            "--font-mono",
+            "--font-size-2xl",
+            "--font-size-display",
+            "--font-size-lg",
+            "--font-size-md",
+            "--font-size-sm",
+            "--font-size-xs",
+            "--grain-blend",
+            "--grain-image",
+            "--grain-opacity",
+            "--radius",
+            "--radius-lg",
+            "--radius-pill",
+            "--radius-xs",
+            "--shadow-button",
+            "--shadow-card",
+            "--shadow-nav",
+            "--shadow-terminal",
+            "--stat-columns",
+            "--terminal-min-height",
+        ];
+
+        let missing: Vec<&str> = expected
+            .iter()
+            .filter(|token| !defined.contains(*token))
+            .copied()
+            .collect();
+        assert!(missing.is_empty(), "tokens.css is missing: {missing:?}");
+        assert_eq!(expected.len(), 62, "contract is 62 tokens");
+    }
+
+    /// The shared layer's sentinels mark the composed section. If a generated
+    /// tokens file contains them, assemble-css.sh refuses to compose.
+    #[test]
+    fn repo_site_tokens_carry_no_shared_layer_sentinels() {
+        let spec =
+            ProjectSpec::new("kiln", "A CLI.", Preset::RepoSite, "/tmp/dev").expect("valid spec");
+        let files = generate(&spec).expect("scaffold should generate");
+        for name in ["tokens.css", "signature.css"] {
+            let file = files
+                .iter()
+                .find(|f| f.path.ends_with(name))
+                .unwrap_or_else(|| panic!("{name} should be generated"));
+            assert!(
+                !file.contents.contains("SHARED-LAYER:BEGIN"),
+                "{name} must not carry the shared-layer sentinel"
+            );
+        }
+    }
+
+    /// Every class the generated markup uses has to be styled by the shared
+    /// layer or by the generated signature, or validation fails on an unstyled
+    /// class.
+    #[test]
+    fn repo_site_markup_only_uses_styled_classes() {
+        let spec =
+            ProjectSpec::new("kiln", "A CLI.", Preset::RepoSite, "/tmp/dev").expect("valid spec");
+        let files = generate(&spec).expect("scaffold should generate");
+
+        let index = files
+            .iter()
+            .find(|f| f.path.ends_with("index.html"))
+            .expect("index.html should be generated");
+        let signature = files
+            .iter()
+            .find(|f| f.path.ends_with("signature.css"))
+            .expect("signature.css should be generated");
+
+        // Classes the shared layer defines; the generated markup must not reach
+        // outside this set plus its own signature classes.
+        const SHARED: &[&str] = &[
+            "skip-link",
+            "brand",
+            "hero",
+            "hero-grid",
+            "eyebrow",
+            "tagline",
+            "actions",
+            "button",
+            "button-primary",
+            "terminal",
+            "terminal-bar",
+            "label",
+            "prompt",
+            "cmt",
+            "reveal",
+            "note",
+            "table-wrap",
+            "site-foot",
+        ];
+        let own: Vec<&str> = ["sig", "sig-row", "sig-name", "sig-note"].to_vec();
+
+        let mut used: Vec<&str> = Vec::new();
+        for (offset, _) in index.contents.match_indices("class=\"") {
+            let after = offset + "class=\"".len();
+            let rest = &index.contents[after..];
+            let end = rest.find('"').expect("closing quote");
+            used.extend(rest[..end].split_whitespace());
+        }
+
+        let unstyled: Vec<&str> = used
+            .iter()
+            .filter(|c| !SHARED.contains(c) && !own.contains(c))
+            .copied()
+            .collect();
+        assert!(unstyled.is_empty(), "unstyled classes: {unstyled:?}");
+        assert!(
+            signature.contents.contains(".sig-row"),
+            "signature must style the classes the markup uses"
+        );
     }
 }

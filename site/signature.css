@@ -1,0 +1,70 @@
+/* ============================================================
+   sparkfile — signature: the emitted tree
+   A scaffold preset's real product is the directory it writes.
+   The `rust-cli` preset emits exactly seven paths, and each one
+   exists to stop a decision being remade: the Justfile fixes the
+   gate commands, CLAUDE.md fixes the conventions, .gitignore fixes
+   what never gets committed, .ctx/HANDOFF.yaml fixes where session
+   state goes. That list is the argument for the tool, so it is what
+   the site is organised around.
+
+   Generated paths wear the amber ink, because every row here is
+   output rather than source. The one row that is not generated --
+   the preset YAML itself -- stays cyan, so the input/output
+   distinction is legible without a legend.
+
+   Same idea as crux's trace rail, doob's handoff board, and
+   minibox's state rail: drawn from something the product already
+   does, not from a designer's mood board.
+   ============================================================ */
+
+.tree {
+  margin: 1.5rem 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface-sunken);
+  overflow: hidden;
+}
+
+.tree-row {
+  display: grid;
+  grid-template-columns: minmax(11rem, 17rem) minmax(0, 1fr);
+  gap: 0.9rem 1.2rem;
+  align-items: baseline;
+  padding: 0.72rem 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.tree-row:first-child {
+  border-top: 0;
+}
+
+.tree-row:hover {
+  background: var(--color-row-hover);
+}
+
+.tree-path {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-ink-2);
+  word-break: break-word;
+}
+
+/* the one authored input, as opposed to the seven generated outputs */
+.tree-row.is-input .tree-path {
+  color: var(--color-accent);
+}
+
+.tree-why {
+  font-size: var(--font-size-sm);
+  color: var(--color-fg-muted);
+}
+
+/* narrow: the two columns stack, because a 17rem path column plus
+   prose has no useful reading width below this. */
+@media (max-width: 44rem) {
+  .tree-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+}
