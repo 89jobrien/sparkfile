@@ -1,5 +1,61 @@
 preset: repo-site
 files:
+  # ------------------------------------------------- diagram theme: screen ----
+  # Needed by render-diagrams.sh before any .mmd can be rendered. The colours
+  # here are neutral placeholders meant to be brought in line with tokens.css;
+  # a diagram rendered in a palette the site does not use is worse than no
+  # diagram, because it looks deliberate.
+  - path: site/diagrams/mermaid.json
+    contents: |
+      {
+        "theme": "base",
+        "themeVariables": {
+          "background": "transparent",
+          "primaryColor": "#2a2b24",
+          "primaryTextColor": "#f4f2e9",
+          "primaryBorderColor": "#484a3e",
+          "lineColor": "#aaa99b",
+          "secondaryColor": "#20211c",
+          "tertiaryColor": "#171812",
+          "fontFamily": "Martian Mono, IBM Plex Mono, ui-monospace, monospace",
+          "fontSize": "14px",
+          "clusterBkg": "#20211c",
+          "clusterBorder": "#484a3e",
+          "edgeLabelBackground": "#20211c",
+          "mainBkg": "#2a2b24",
+          "nodeTextColor": "#f4f2e9",
+          "titleColor": "#f4f2e9",
+          "textColor": "#f4f2e9"
+        },
+        "flowchart": { "htmlLabels": true, "curve": "basis", "useMaxWidth": true }
+      }
+
+  # -------------------------------------------------- diagram theme: print ----
+  # The shared layer's print block goes light, so the print render must too.
+  - path: site/diagrams/mermaid.print.json
+    contents: |
+      {
+        "theme": "base",
+        "themeVariables": {
+          "background": "transparent",
+          "primaryColor": "#f7f5ef",
+          "primaryTextColor": "#1f201b",
+          "primaryBorderColor": "#8a8b7a",
+          "lineColor": "#5c5d51",
+          "secondaryColor": "#efece3",
+          "tertiaryColor": "#e6e2d6",
+          "fontFamily": "Martian Mono, IBM Plex Mono, ui-monospace, monospace",
+          "fontSize": "14px",
+          "clusterBkg": "#efece3",
+          "clusterBorder": "#b6b4a4",
+          "edgeLabelBackground": "#f7f5ef",
+          "mainBkg": "#f7f5ef",
+          "nodeTextColor": "#1f201b",
+          "titleColor": "#1f201b",
+          "textColor": "#1f201b"
+        },
+        "flowchart": { "htmlLabels": true, "curve": "basis", "useMaxWidth": true }
+      }
   # ---------------------------------------------------------------- index ----
   - path: site/index.html
     contents: |

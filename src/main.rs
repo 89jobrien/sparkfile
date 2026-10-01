@@ -5,9 +5,12 @@ use std::{
 };
 
 use sparkfile::{
+    codemeta::Metadata,
+    docs::Docs,
     domain::{Preset, ProjectSpec, SpecError},
     fs::{WriteError, write_files},
-    scaffold::{ScaffoldError, generate},
+    scaffold::{ScaffoldError, generate, preset_files},
+    sitegen,
 };
 
 fn main() -> ExitCode {
@@ -43,6 +46,7 @@ enum CliError {
     Spec(SpecError),
     Scaffold(ScaffoldError),
     Write(WriteError),
+    Site(String),
 }
 
 fn run<I, S>(args: I) -> Result<RunSummary, CliError>
@@ -54,12 +58,15 @@ where
 
     let command = args
         .next()
-        .ok_or(CliError::Usage("missing command `new`"))?;
+        .ok_or(CliError::Usage("missing command `new` or `site`"))?;
     if command == "--help" || command == "-h" {
         return Err(CliError::Usage("help requested"));
     }
+    if command == "site" {
+        return generate_site(args.collect());
+    }
     if command != "new" {
-        return Err(CliError::Usage("expected command `new`"));
+        return Err(CliError::Usage("expected command `new` or `site`"));
     }
 
     let preset_arg = args
@@ -140,6 +147,163 @@ fn display_path(path: &Path, target_dir: &Path) -> String {
         .unwrap_or_else(|_| path.display().to_string())
 }
 
+/// `sparkfile site <repo> [--description <text>]`
+///
+/// Rewrites the body of an existing site from the repository's own
+/// `cargo metadata`. Page shapes come from [`sparkfile::sitegen`]; this
+/// writes them, composing a full HTML document around each body so the
+/// pages carry the same nav and metadata a hand-written site would.
+fn generate_site(args: Vec<String>) -> Result<RunSummary, CliError> {
+    let repo = args.first().cloned().ok_or(CliError::Usage(
+        "usage: sparkfile site <repo> [--description <text>]",
+    ))?;
+    let mut description = String::new();
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--description" => {
+                description = args
+                    .get(i + 1)
+                    .cloned()
+                    .ok_or(CliError::MissingValue("--description"))?;
+                i += 2;
+            }
+            other => return Err(CliError::UnexpectedArgument(other.to_string())),
+        }
+    }
+
+    let root = Path::new(&repo);
+    if !root.is_dir() {
+        return Err(CliError::Site(format!("{repo} is not a directory")));
+    }
+    let metadata = Metadata::load(root).map_err(|e| CliError::Site(e.to_string()))?;
+    let docs = Docs::load(root);
+
+    let name = metadata
+        .packages
+        .first()
+        .map(|p| p.name.clone())
+        .unwrap_or_else(|| repo.clone());
+    if description.is_empty() {
+        // README lede first, then the manifest summary: the lede explains the
+        // project, the manifest field is a crates.io blurb.
+        description = docs
+            .lede
+            .clone()
+            .or_else(|| metadata.summary().map(str::to_string))
+            .unwrap_or_else(|| format!("{name}."));
+    }
+
+    let plan = sitegen::plan_with_docs(&name, &description, &metadata, &docs);
+    let site_dir = root.join("site");
+    let mut written = Vec::new();
+    for page in &plan.pages {
+        let document = render_page(page, &plan, &description);
+        let path = site_dir.join(&page.file_name);
+        std::fs::create_dir_all(&site_dir)
+            .map_err(|e| CliError::Site(format!("cannot create site/: {e}")))?;
+        std::fs::write(&path, document)
+            .map_err(|e| CliError::Site(format!("cannot write {}: {e}", path.display())))?;
+        written.push(path);
+    }
+
+    // Commit the diagram source the architecture page points at. The renders
+    // themselves come from render-diagrams.sh, which the next-steps text
+    // points at; producing them here would duplicate that script's job.
+    if let Some(diagram) = plan.pages.iter().find_map(|p| p.diagram.as_deref()) {
+        let diagrams = site_dir.join("diagrams");
+        std::fs::create_dir_all(&diagrams)
+            .map_err(|e| CliError::Site(format!("cannot create site/diagrams: {e}")))?;
+        let path = diagrams.join("architecture.mmd");
+        std::fs::write(&path, diagram)
+            .map_err(|e| CliError::Site(format!("cannot write {}: {e}", path.display())))?;
+        written.push(path);
+    }
+
+    // The preset is the base layer: it owns tokens, the signature stub, the
+    // diagram themes, and the workflow. Write only what is missing, so a
+    // palette or theme someone has already tuned is never clobbered by
+    // regenerating pages. This is also how a site generated before the
+    // preset carried diagram themes picks them up.
+    for (rel, contents) in preset_files(Preset::RepoSite).map_err(CliError::Scaffold)? {
+        let path = root.join(&rel);
+        if path.exists() {
+            continue;
+        }
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| CliError::Site(format!("cannot create {}: {e}", parent.display())))?;
+        }
+        let filled = contents
+            .replace("{{name}}", &name)
+            .replace("{{description}}", &description);
+        std::fs::write(&path, filled)
+            .map_err(|e| CliError::Site(format!("cannot write {}: {e}", path.display())))?;
+        written.push(path);
+    }
+
+    Ok(RunSummary {
+        name,
+        target_dir: root.to_path_buf(),
+        files: written,
+        preset: Preset::RepoSite,
+    })
+}
+
+/// Wrap a generated page body in the shared site's document chrome.
+fn render_page(page: &sitegen::Page, plan: &sitegen::SitePlan, description: &str) -> String {
+    let nav: String = plan
+        .nav()
+        .iter()
+        .map(|(label, href)| {
+            let current = if *href == page.file_name {
+                r#" aria-current="page""#
+            } else {
+                ""
+            };
+            format!("      <a href=\"{href}\"{current}>{label}</a>\n")
+        })
+        .collect();
+
+    // r## not r# : the skip-link href contains `"#`, which would close an
+    // r"..." raw string at `href="#main"`.
+    format!(
+        r##"<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="{description}">
+    <title>{title}</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html" class="brand">{brand}</a>
+{nav}    </nav>
+
+    <main id="main">
+{body}    </main>
+  </body>
+</html>
+"##,
+        description = html_escape(description),
+        title = html_escape(&page.title),
+        brand = html_escape(&plan.project),
+        nav = nav,
+        body = page.body,
+    )
+}
+
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
 fn usage() -> &'static str {
     "usage: sparkfile new rust-cli <name> [--description <text>] [--root <path>]"
 }
@@ -157,6 +321,7 @@ impl std::fmt::Display for CliError {
             Self::Spec(error) => error.fmt(formatter),
             Self::Scaffold(error) => error.fmt(formatter),
             Self::Write(error) => error.fmt(formatter),
+            Self::Site(message) => write!(formatter, "{message}"),
         }
     }
 }

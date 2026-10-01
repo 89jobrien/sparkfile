@@ -38,6 +38,21 @@ pub fn generate(spec: &ProjectSpec) -> Result<Vec<FileEntry>, ScaffoldError> {
     generate_from_definition(spec, &definition)
 }
 
+/// The preset's files as `(path relative to the target, contents)`, without
+/// interpolating a project.
+///
+/// Callers that already have a directory — adding a site to an existing repo,
+/// say — need the relative paths rather than `generate`'s target-joined ones,
+/// which would nest a second copy of the project name inside the repo.
+pub fn preset_files(preset: Preset) -> Result<Vec<(PathBuf, String)>, ScaffoldError> {
+    let definition = definition_for(preset)?;
+    Ok(definition
+        .files
+        .iter()
+        .map(|file| (file.path.clone(), file.contents.clone()))
+        .collect())
+}
+
 fn definition_for(preset: Preset) -> Result<ScaffoldDefinition, ScaffoldError> {
     match preset {
         Preset::RustCli => definition_from_yaml(include_str!("../scaffolds/rust-cli.yaml")),
@@ -236,6 +251,10 @@ files:
         assert_eq!(
             paths,
             vec![
+                // Diagram themes ship with the preset so render-diagrams.sh can
+                // render any .mmd the codebase generator later writes.
+                "site/diagrams/mermaid.json",
+                "site/diagrams/mermaid.print.json",
                 "site/index.html",
                 "site/tokens.css",
                 "site/signature.css",
