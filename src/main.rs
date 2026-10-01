@@ -30,6 +30,7 @@ struct RunSummary {
     name: String,
     target_dir: PathBuf,
     files: Vec<PathBuf>,
+    preset: Preset,
 }
 
 #[derive(Debug)]
@@ -93,6 +94,7 @@ where
         name: spec.name,
         target_dir,
         files: files.into_iter().map(|file| file.path).collect(),
+        preset: spec.preset,
     })
 }
 
@@ -107,7 +109,27 @@ fn print_summary(summary: &RunSummary) {
         println!("  - {}", display_path(path, &summary.target_dir));
     }
     println!("next steps:");
-    println!("  - Review {}/CLAUDE.md", summary.name);
+    if summary.preset == Preset::RepoSite {
+        // Pages is a repository setting, not a file, so the preset cannot emit
+        // it. Without this the first deploy fails on configure-pages with
+        // "please verify that the repository has Pages enabled", which reads
+        // like a broken workflow rather than a missing setting.
+        println!("  - Enable Pages once (required before the workflow can run):");
+        println!(
+            "      gh api --method POST repos/89jobrien/{}/pages -f build_type=workflow",
+            summary.name
+        );
+        println!("  - Fetch the fonts your tokens.css declares, then compose:");
+        println!(
+            "      bash <repo-reference-site>/scripts/fetch-fonts.sh <repo> \"family:weight\" ..."
+        );
+        println!(
+            "      bash <repo-reference-site>/scripts/assemble-css.sh <repo> site/tokens.css site/signature.css"
+        );
+        println!("  - Validate: node <repo-reference-site>/scripts/validate-css.mjs <repo>");
+    } else {
+        println!("  - Review {}/CLAUDE.md", summary.name);
+    }
     println!("  - Initialize git if this should be an independent repository");
     println!("  - Add a one-line description to the workspace project index if needed");
 }
