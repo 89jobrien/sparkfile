@@ -381,6 +381,7 @@ files:
         // outside this set plus its own signature classes.
         const SHARED: &[&str] = &[
             "skip-link",
+            "nav",
             "brand",
             "hero",
             "hero-grid",
