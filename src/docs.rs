@@ -193,6 +193,7 @@ fn collapse(value: &str) -> String {
 pub fn body_to_html(markdown: &str) -> String {
     let mut out = String::new();
     let mut in_fence = false;
+    let mut fence_lang = String::new();
     let mut code = String::new();
     let mut prose = String::new();
     let mut table: Vec<String> = Vec::new();
@@ -209,12 +210,22 @@ pub fn body_to_html(markdown: &str) -> String {
     for line in markdown.lines() {
         if line.trim_start().starts_with("```") {
             if in_fence {
-                out.push_str("<pre><code>");
-                out.push_str(&escape(&code));
-                out.push_str("</code></pre>\n");
+                // A shell example is something a reader would type, so it
+                // becomes a terminal rather than a code block. That is the
+                // difference crux makes across fourteen commands on its CLI
+                // page, and it is what makes a run look runnable.
+                if is_shell(&fence_lang) {
+                    out.push_str(&terminal_html(&code));
+                } else {
+                    out.push_str("<pre><code>");
+                    out.push_str(&escape(&code));
+                    out.push_str("</code></pre>\n");
+                }
                 code.clear();
+                fence_lang.clear();
             } else {
                 flush_prose(&mut prose, &mut out);
+                fence_lang = line.trim_start().trim_start_matches('`').trim().to_string();
             }
             in_fence = !in_fence;
             continue;
@@ -249,11 +260,110 @@ pub fn body_to_html(markdown: &str) -> String {
 
     // A trailing unterminated fence would otherwise be dropped silently.
     if in_fence && !code.trim().is_empty() {
-        out.push_str("<pre><code>");
-        out.push_str(&escape(&code));
-        out.push_str("</code></pre>\n");
+        if is_shell(&fence_lang) {
+            out.push_str(&terminal_html(&code));
+        } else {
+            out.push_str("<pre><code>");
+            out.push_str(&escape(&code));
+            out.push_str("</code></pre>\n");
+        }
     }
     out
+}
+
+/// Fence languages that describe running something rather than showing source.
+fn is_shell(lang: &str) -> bool {
+    matches!(
+        lang.trim().to_ascii_lowercase().as_str(),
+        "bash" | "sh" | "shell" | "zsh" | "console" | "nu" | "nushell" | ""
+    )
+}
+
+/// Render a shell example as a terminal component.
+///
+/// The label is the first command in the example, which is the thing a reader
+/// is looking for when they scan the page; the body is the example with the
+/// prompt and the comments marked up the way a captured session would look.
+fn terminal_html(code: &str) -> String {
+    let label = command_label(code);
+    let mut body = String::new();
+    let mut prompted = false;
+
+    for line in code.trim_end().lines() {
+        let trimmed = line.trim();
+        if !prompted
+            && !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+            && !trimmed.starts_with('$')
+        {
+            body.push_str("<span class=\"prompt\">$</span> ");
+            prompted = true;
+        } else if !prompted && trimmed.starts_with('$') {
+            // Already carries its own prompt.
+            prompted = true;
+            body.push_str(&escape(line));
+            body.push('\n');
+            continue;
+        }
+        if trimmed.starts_with('#') {
+            body.push_str("<span class=\"cmt\">");
+            body.push_str(&escape(line));
+            body.push_str("</span>\n");
+            continue;
+        }
+        body.push_str(&escape(line));
+        body.push('\n');
+    }
+
+    format!(
+        "<div class=\"terminal\">\n  <div class=\"terminal-bar\"><span class=\"label\">{}</span></div>\n  <pre>{}</pre>\n</div>\n",
+        escape(&label),
+        body
+    )
+}
+
+/// The first runnable command in a shell example, for the terminal's label.
+///
+/// Continuation lines are folded in, because a command broken across two
+/// lines with a trailing backslash is one command and the label saying
+/// otherwise would be a small lie.
+fn command_label(code: &str) -> String {
+    let mut label = String::new();
+    for line in code.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if trimmed.starts_with('$') {
+            // A prompt: the command follows it.
+            let command = trimmed.trim_start_matches('$').trim();
+            if !command.is_empty() {
+                label = command.to_string();
+            }
+            continue;
+        }
+        if label.is_empty() {
+            label = trimmed.trim_start_matches('$').trim().to_string();
+        } else {
+            label.push(' ');
+            label.push_str(trimmed.trim_start_matches('$').trim());
+        }
+        if !label.ends_with('\\') {
+            break;
+        }
+        label.pop();
+        label.pop();
+    }
+    if label.is_empty() {
+        return "shell".to_string();
+    }
+    // Long invocations become unreadable as a label; the body still has them.
+    if label.chars().count() > 68 {
+        let mut short: String = label.chars().take(65).collect();
+        short.push_str("...");
+        return short;
+    }
+    label
 }
 
 /// A pipe-table row: starts with `|`, or has a `|` with dashes around it.
@@ -400,10 +510,12 @@ Never overwrites. See the [guide](docs/guide.md).
 
     #[test]
     fn body_renders_fences_and_inline_code() {
-        let html = body_to_html("Run `kiln fire` now.\n\n```bash\nkiln fire <file>\n```\n");
+        // A non-shell fence stays a code block; shell fences become terminals,
+        // which shell_examples_become_terminal_components covers.
+        let html = body_to_html("Run `kiln fire` now.\n\n```toml\nkey = \"<value>\"\n```\n");
         assert!(html.contains("<code>kiln fire</code>"), "{html}");
         assert!(html.contains("<pre><code>"), "{html}");
-        assert!(html.contains("kiln fire &lt;file&gt;"), "{html}");
+        assert!(html.contains("key = &quot;&lt;value&gt;&quot;"), "{html}");
         assert!(html.contains("<p>"), "{html}");
     }
 
@@ -463,6 +575,66 @@ Never overwrites. See the [guide](docs/guide.md).
         let html = body_to_html("```\n| not | a table |\n| --- | --- |\n```\n");
         assert!(!html.contains("<table"), "{html}");
         assert!(html.contains("| not | a table |"), "{html}");
+    }
+
+    #[test]
+    fn shell_examples_become_terminal_components() {
+        let html = body_to_html("Run it:\n\n```bash\ncrux list .\n```\n");
+        assert!(html.contains("class=\"terminal\""), "{html}");
+        assert!(
+            html.contains("<span class=\"label\">crux list .</span>"),
+            "{html}"
+        );
+        assert!(html.contains("<span class=\"prompt\">$</span>"), "{html}");
+        assert!(!html.contains("<pre><code>"), "{html}");
+    }
+
+    #[test]
+    fn non_shell_fences_stay_code_blocks() {
+        let html = body_to_html("```rust\nfn main() {}\n```\n");
+        assert!(html.contains("<pre><code>"), "{html}");
+        assert!(!html.contains("class=\"terminal\""), "{html}");
+    }
+
+    #[test]
+    fn every_shell_dialect_is_a_terminal() {
+        for lang in ["bash", "sh", "shell", "zsh", "nu", "console", ""] {
+            let html = body_to_html(&format!("```{lang}\ncmd --flag\n```\n"));
+            assert!(html.contains("class=\"terminal\""), "lang {lang}: {html}");
+        }
+    }
+
+    #[test]
+    fn terminal_label_folds_continuations() {
+        let label = command_label("crux run a.crux \\\n  b.json --dry-run\n");
+        assert_eq!(label, "crux run a.crux b.json --dry-run");
+    }
+
+    #[test]
+    fn terminal_label_skips_comments_and_finds_the_command() {
+        let label = command_label("# install first\n# then run\ncargo install kiln\n");
+        assert_eq!(label, "cargo install kiln");
+    }
+
+    #[test]
+    fn terminal_label_accepts_an_existing_prompt() {
+        assert_eq!(
+            command_label("$ hj handoff --summary x\n"),
+            "hj handoff --summary x"
+        );
+    }
+
+    #[test]
+    fn very_long_commands_are_truncated_in_the_label() {
+        let long = "cargo run --release --bin thing -- --with-a-flag --and-another --and-more";
+        let label = command_label(long);
+        assert!(label.ends_with("..."), "{label}");
+        assert!(label.chars().count() <= 68, "{}", label.len());
+    }
+
+    #[test]
+    fn an_all_comment_example_still_gets_a_label() {
+        assert_eq!(command_label("# just a comment\n"), "shell");
     }
 
     #[test]
