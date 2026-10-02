@@ -9,6 +9,7 @@ use sparkfile::{
     docs::Docs,
     domain::{Preset, ProjectSpec, SpecError},
     fs::{WriteError, write_files},
+    help::capture_help,
     scaffold::{ScaffoldError, generate, preset_files},
     sitegen,
 };
@@ -155,9 +156,10 @@ fn display_path(path: &Path, target_dir: &Path) -> String {
 /// pages carry the same nav and metadata a hand-written site would.
 fn generate_site(args: Vec<String>) -> Result<RunSummary, CliError> {
     let repo = args.first().cloned().ok_or(CliError::Usage(
-        "usage: sparkfile site <repo> [--description <text>]",
+        "usage: sparkfile site <repo> [--description <text>] [--with-help]",
     ))?;
     let mut description = String::new();
+    let mut with_help = false;
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -167,6 +169,12 @@ fn generate_site(args: Vec<String>) -> Result<RunSummary, CliError> {
                     .cloned()
                     .ok_or(CliError::MissingValue("--description"))?;
                 i += 2;
+            }
+            // Opt-in because each capture builds the binary, which is slow
+            // enough that a site refresh should ask for it deliberately.
+            "--with-help" => {
+                with_help = true;
+                i += 1;
             }
             other => return Err(CliError::UnexpectedArgument(other.to_string())),
         }
@@ -194,7 +202,16 @@ fn generate_site(args: Vec<String>) -> Result<RunSummary, CliError> {
             .unwrap_or_else(|| format!("{name}."));
     }
 
-    let plan = sitegen::plan_with_docs(&name, &description, &metadata, &docs);
+    let mut help = Vec::new();
+    if with_help {
+        for package in &metadata.packages {
+            for binary in package.binaries() {
+                help.extend(capture_help(root, &binary.name));
+            }
+        }
+    }
+
+    let plan = sitegen::plan_with_docs(&name, &description, &metadata, &docs, &help);
     let site_dir = root.join("site");
     let mut written = Vec::new();
     for page in &plan.pages {

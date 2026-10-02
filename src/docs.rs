@@ -284,8 +284,17 @@ fn is_shell(lang: &str) -> bool {
 /// The label is the first command in the example, which is the thing a reader
 /// is looking for when they scan the page; the body is the example with the
 /// prompt and the comments marked up the way a captured session would look.
-fn terminal_html(code: &str) -> String {
-    let label = command_label(code);
+pub fn terminal_html(code: &str) -> String {
+    terminal_html_with_label(code, &command_label(code))
+}
+
+/// Render a terminal with a label we already know.
+///
+/// `--help` output begins with about-text rather than a command, so deriving a
+/// label from it yields "Claude Code course-correction hook pipeline" instead
+/// of the invocation that produced it. When the caller knows the invocation,
+/// it says so rather than letting the renderer guess.
+pub fn terminal_html_with_label(code: &str, label: &str) -> String {
     let mut body = String::new();
     let mut prompted = false;
 
@@ -317,7 +326,7 @@ fn terminal_html(code: &str) -> String {
 
     format!(
         "<div class=\"terminal\">\n  <div class=\"terminal-bar\"><span class=\"label\">{}</span></div>\n  <pre>{}</pre>\n</div>\n",
-        escape(&label),
+        escape(label),
         body
     )
 }
@@ -635,6 +644,24 @@ Never overwrites. See the [guide](docs/guide.md).
     #[test]
     fn an_all_comment_example_still_gets_a_label() {
         assert_eq!(command_label("# just a comment\n"), "shell");
+    }
+
+    #[test]
+    fn an_explicit_label_wins_over_the_derived_one() {
+        // `--help` opens with about-text, not a command, so deriving a label
+        // from it produces the description rather than the invocation.
+        let html = terminal_html_with_label(
+            "Claude Code course-correction hook pipeline\n\nUsage: crs <COMMAND>\n",
+            "crs probe --help",
+        );
+        assert!(
+            html.contains("<span class=\"label\">crs probe --help</span>"),
+            "{html}"
+        );
+        assert!(
+            !html.contains("course-correction hook pipeline</span>"),
+            "{html}"
+        );
     }
 
     #[test]

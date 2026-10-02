@@ -13,5 +13,6 @@ pub mod codemeta;
 pub mod docs;
 pub mod domain;
 pub mod fs;
+pub mod help;
 pub mod scaffold;
 pub mod sitegen;

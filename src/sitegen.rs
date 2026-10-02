@@ -14,6 +14,11 @@
 
 use crate::codemeta::Metadata;
 use crate::docs::{Docs, body_to_html};
+use crate::help::HelpCapture;
+
+/// Re-exported so the CLI page renders help output exactly as a README's shell
+/// examples render. One component, two sources.
+use crate::docs::terminal_html_with_label;
 
 /// One generated page: a file name and its HTML body.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,10 +53,10 @@ impl SitePlan {
 
 /// Build the page set for a workspace.
 pub fn plan(project: &str, description: &str, metadata: &Metadata) -> SitePlan {
-    plan_with_docs(project, description, metadata, &Docs::default())
+    plan_with_docs(project, description, metadata, &Docs::default(), &[])
 }
 
-/// Build the page set, taking prose from `docs`.
+/// Build the page set, taking prose from `docs` and CLI surface from `help`.
 ///
 /// The README lede wins over the manifest description: Cargo's `description`
 /// field is a crate-index summary, and a site hero is not a crate index.
@@ -60,6 +65,7 @@ pub fn plan_with_docs(
     description: &str,
     metadata: &Metadata,
     docs: &Docs,
+    help: &[HelpCapture],
 ) -> SitePlan {
     let lede = docs.lede.as_deref().unwrap_or(description).to_string();
 
@@ -74,6 +80,9 @@ pub fn plan_with_docs(
     pages.push(crates_page(project, metadata));
     if metadata.total_features() > 0 {
         pages.push(features_page(project, metadata));
+    }
+    if !help.is_empty() {
+        pages.push(cli_page(project, help));
     }
     if metadata.total_binaries() > 0 {
         pages.push(commands_page(project, metadata));
@@ -128,6 +137,36 @@ fn guide_page(project: &str, docs: &Docs) -> Option<Page> {
         body,
         diagram: None,
     })
+}
+
+/// One terminal per captured `--help`, the way crux documents its CLI.
+fn cli_page(project: &str, help: &[HelpCapture]) -> Page {
+    let mut body = String::from(
+        r#"      <section id="cli" class="reveal">
+        <h2>CLI</h2>
+        <p class="note">
+          Captured by running each binary with <code>--help</code>. It cannot
+          drift from the tool the way a transcribed page can.
+        </p>
+"#,
+    );
+    for capture in help {
+        body.push_str(&format!(
+            "        <h3 id=\"{}\">{}</h3>\n{}",
+            anchor(&capture.label),
+            escape(&capture.label),
+            terminal_html_with_label(&capture.output, &capture.label)
+        ));
+    }
+    body.push_str("      </section>\n");
+
+    Page {
+        file_name: "cli.html".into(),
+        title: format!("{project} CLI"),
+        nav_label: "CLI".into(),
+        body,
+        diagram: None,
+    }
 }
 
 /// A heading title as an HTML id.
