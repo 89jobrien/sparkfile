@@ -15,6 +15,14 @@ use sparkfile::{
 };
 
 fn main() -> ExitCode {
+    if env::args()
+        .skip(1)
+        .any(|arg| arg == "--version" || arg == "-V")
+    {
+        println!("sparkfile {}", env!("CARGO_PKG_VERSION"));
+        return ExitCode::SUCCESS;
+    }
+
     match run(env::args().skip(1)) {
         Ok(summary) => {
             print_summary(&summary);
