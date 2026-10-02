@@ -294,6 +294,13 @@ pub fn terminal_html(code: &str) -> String {
 /// label from it yields "Claude Code course-correction hook pipeline" instead
 /// of the invocation that produced it. When the caller knows the invocation,
 /// it says so rather than letting the renderer guess.
+///
+/// A label that only restates the block it heads is dropped. A derived label is
+/// the block's own first command, so it almost always does, and a bar that
+/// repeats the line printed directly beneath it is noise; the bar's `::before`
+/// still draws the window dots, so the chrome survives and only the repetition
+/// goes. A label that is genuinely a title -- `crux run --dry-run` above a
+/// command carrying extra arguments -- is kept.
 pub fn terminal_html_with_label(code: &str, label: &str) -> String {
     let mut body = String::new();
     let mut prompted = false;
@@ -324,11 +331,35 @@ pub fn terminal_html_with_label(code: &str, label: &str) -> String {
         body.push('\n');
     }
 
-    format!(
-        "<div class=\"terminal\">\n  <div class=\"terminal-bar\"><span class=\"label\">{}</span></div>\n  <pre>{}</pre>\n</div>\n",
-        escape(label),
-        body
-    )
+    let bar = if restates_code(label, code) {
+        "<div class=\"terminal-bar\"></div>\n".to_string()
+    } else {
+        format!(
+            "<div class=\"terminal-bar\"><span class=\"label\">{}</span></div>\n",
+            escape(label)
+        )
+    };
+
+    format!("<div class=\"terminal\">\n  {bar}  <pre>{body}</pre>\n</div>\n")
+}
+
+/// Collapse whitespace so a command folded across two lines compares equal to
+/// the same command printed on one.
+fn normalize_ws(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Does this label only restate the block it heads?
+///
+/// A trailing ellipsis marks a label the caller truncated, so the untruncated
+/// prefix is what has to be found. Very short labels are never treated as
+/// restatements; they are too likely to appear incidentally.
+fn restates_code(label: &str, code: &str) -> bool {
+    let trimmed = label.trim().trim_end_matches(['.', '\u{2026}']).trim();
+    if trimmed.chars().count() < 3 {
+        return false;
+    }
+    normalize_ws(code).contains(&normalize_ws(trimmed))
 }
 
 /// The first runnable command in a shell example, for the terminal's label.
@@ -590,12 +621,47 @@ Never overwrites. See the [guide](docs/guide.md).
     fn shell_examples_become_terminal_components() {
         let html = body_to_html("Run it:\n\n```bash\ncrux list .\n```\n");
         assert!(html.contains("class=\"terminal\""), "{html}");
+        // The derived label was this block's own command, so it is dropped and
+        // the bar keeps only its window chrome.
         assert!(
-            html.contains("<span class=\"label\">crux list .</span>"),
+            html.contains("<div class=\"terminal-bar\"></div>"),
             "{html}"
         );
+        assert!(!html.contains("class=\"label\""), "{html}");
         assert!(html.contains("<span class=\"prompt\">$</span>"), "{html}");
         assert!(!html.contains("<pre><code>"), "{html}");
+    }
+
+    #[test]
+    fn a_label_that_only_restates_the_block_is_dropped() {
+        let html = terminal_html_with_label("hj install\n", "hj install");
+        assert!(!html.contains("class=\"label\""), "{html}");
+        assert!(html.contains("terminal-bar"), "chrome survives: {html}");
+    }
+
+    #[test]
+    fn a_truncated_label_is_compared_without_its_ellipsis() {
+        let code = "cargo install --path crates/thing --bins --force --root ~/.local\n";
+        let label = "cargo install --path crates/thing --bins --force...";
+        let html = terminal_html_with_label(code, label);
+        assert!(!html.contains("class=\"label\""), "{html}");
+    }
+
+    #[test]
+    fn a_label_that_is_a_real_title_is_kept() {
+        let code = "crux run a.crux b.json --dry-run\n";
+        let html = terminal_html_with_label(code, "crux run --dry-run");
+        assert!(
+            html.contains("<span class=\"label\">crux run --dry-run</span>"),
+            "{html}"
+        );
+    }
+
+    #[test]
+    fn an_all_comment_block_keeps_its_shell_label() {
+        let code = "# just a comment\n";
+        let html = terminal_html_with_label(code, &command_label(code));
+        assert!(html.contains(">shell</span>"), "{html}");
     }
 
     #[test]

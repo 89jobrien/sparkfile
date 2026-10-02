@@ -20,10 +20,14 @@ use crate::help::HelpCapture;
 /// examples render. One component, two sources.
 use crate::docs::terminal_html_with_label;
 
-/// One generated page: a file name and its HTML body.
+/// One generated page: a slug, a title, and its HTML body.
+///
+/// `slug` is identity only — "guide", "crates". Where the page is written and
+/// how other pages link to it are derived from it, so the layout is a property
+/// of the generator rather than something repeated in every page constructor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Page {
-    pub file_name: String,
+    pub slug: String,
     pub title: String,
     pub nav_label: String,
     pub body: String,
@@ -31,6 +35,51 @@ pub struct Page {
     /// caller writes it so the `.mmd` is committed alongside the page rather
     /// than only existing in memory.
     pub diagram: Option<String>,
+}
+
+/// Prefix that reaches the site root from a page with this slug.
+///
+/// Assets live at the site root, so a subpage has to climb out of its own
+/// directory to reach them and the landing page does not.
+fn asset_prefix_for(slug: &str) -> &'static str {
+    if slug == "index" { "" } else { "../" }
+}
+
+impl Page {
+    /// The landing page is the one page that stays at the site root. Every
+    /// other page becomes `<slug>/index.html`, so the URLs read `/guide/`
+    /// rather than `/guide.html`, while the landing URL other sites link to
+    /// never moves.
+    pub fn is_landing(&self) -> bool {
+        self.slug == "index"
+    }
+
+    /// Path this page is written to, relative to the site directory.
+    pub fn output_path(&self) -> String {
+        if self.is_landing() {
+            "index.html".to_string()
+        } else {
+            format!("{}/index.html", self.slug)
+        }
+    }
+
+    /// Prefix that reaches the site root from this page.
+    pub fn asset_prefix(&self) -> &'static str {
+        asset_prefix_for(&self.slug)
+    }
+
+    /// Clean URL linking this page to another.
+    pub fn href_to(&self, other: &Page) -> String {
+        let up = self.asset_prefix();
+        if other.is_landing() {
+            return if up.is_empty() {
+                "./".to_string()
+            } else {
+                up.to_string()
+            };
+        }
+        format!("{up}{}/", other.slug)
+    }
 }
 
 /// The pages to generate, in nav order.
@@ -42,11 +91,19 @@ pub struct SitePlan {
 }
 
 impl SitePlan {
-    /// Section ids referenced by the nav, in order.
+    /// The landing page, which every other page links back to.
+    pub fn landing(&self) -> &Page {
+        self.pages
+            .iter()
+            .find(|p| p.is_landing())
+            .expect("every plan has a landing page")
+    }
+
+    /// Nav labels in page order, paired with the slug they point at.
     pub fn nav(&self) -> Vec<(&str, &str)> {
         self.pages
             .iter()
-            .map(|p| (p.nav_label.as_str(), p.file_name.as_str()))
+            .map(|p| (p.nav_label.as_str(), p.slug.as_str()))
             .collect()
     }
 }
@@ -131,7 +188,7 @@ fn guide_page(project: &str, docs: &Docs) -> Option<Page> {
     body.push_str("      </section>\n");
 
     Some(Page {
-        file_name: "guide.html".into(),
+        slug: "guide".into(),
         title: format!("{project} guide"),
         nav_label: "Guide".into(),
         body,
@@ -161,7 +218,7 @@ fn cli_page(project: &str, help: &[HelpCapture]) -> Page {
     body.push_str("      </section>\n");
 
     Page {
-        file_name: "cli.html".into(),
+        slug: "cli".into(),
         title: format!("{project} CLI"),
         nav_label: "CLI".into(),
         body,
@@ -253,7 +310,7 @@ fn overview_page(project: &str, description: &str, m: &Metadata) -> Page {
     );
 
     Page {
-        file_name: "index.html".into(),
+        slug: "index".into(),
         title: project.into(),
         nav_label: "Overview".into(),
         body,
@@ -266,6 +323,10 @@ fn architecture_page(project: &str, diagram: &str) -> Page {
     // screen + print SVG, wrapped in <picture>. An inline <pre class="mermaid">
     // would need a client-side Mermaid runtime the shared layer deliberately
     // does not carry, and an unstyled class.
+    //
+    // The architecture page is always a subpage, so the rendered SVGs live one
+    // directory up and the reference has to climb out to reach them.
+    let up = asset_prefix_for("architecture");
     let body = format!(
         r#"      <section id="architecture" class="reveal">
         <h2>Architecture</h2>
@@ -276,8 +337,8 @@ fn architecture_page(project: &str, diagram: &str) -> Page {
         </p>
         <figure class="diagram">
           <picture>
-            <source srcset="diagrams/architecture.print.svg" media="print">
-            <img src="diagrams/architecture.svg" alt="Workspace crates, their binaries, and the dependencies between them.">
+            <source srcset="{up}diagrams/architecture.print.svg" media="print">
+            <img src="{up}diagrams/architecture.svg" alt="Workspace crates, their binaries, and the dependencies between them.">
           </picture>
           <figcaption>
             Workspace crates and their binaries. Edit
@@ -290,7 +351,7 @@ fn architecture_page(project: &str, diagram: &str) -> Page {
     );
 
     Page {
-        file_name: "architecture.html".into(),
+        slug: "architecture".into(),
         title: format!("{project} architecture"),
         nav_label: "Architecture".into(),
         body,
@@ -345,7 +406,7 @@ fn crates_page(project: &str, m: &Metadata) -> Page {
     );
 
     Page {
-        file_name: "crates.html".into(),
+        slug: "crates".into(),
         title: format!("{project} crates"),
         nav_label: "Crates".into(),
         body,
@@ -393,7 +454,7 @@ fn features_page(project: &str, m: &Metadata) -> Page {
     );
 
     Page {
-        file_name: "features.html".into(),
+        slug: "features".into(),
         title: format!("{project} features"),
         nav_label: "Features".into(),
         body,
@@ -443,7 +504,7 @@ fn commands_page(project: &str, m: &Metadata) -> Page {
     );
 
     Page {
-        file_name: "commands.html".into(),
+        slug: "commands".into(),
         title: format!("{project} commands"),
         nav_label: "Commands".into(),
         body,
@@ -488,16 +549,10 @@ mod tests {
     #[test]
     fn plan_emits_overview_crates_and_commands() {
         let plan = plan("demo", "A demo.", &sample());
-        let names: Vec<&str> = plan.pages.iter().map(|p| p.file_name.as_str()).collect();
+        let names: Vec<&str> = plan.pages.iter().map(|p| p.slug.as_str()).collect();
         assert_eq!(
             names,
-            vec![
-                "index.html",
-                "architecture.html",
-                "crates.html",
-                "features.html",
-                "commands.html"
-            ]
+            vec!["index", "architecture", "crates", "features", "commands"]
         );
     }
 
@@ -518,7 +573,7 @@ mod tests {
         let crates = plan
             .pages
             .iter()
-            .find(|p| p.file_name == "crates.html")
+            .find(|p| p.slug == "crates")
             .expect("crates page");
         assert!(crates.body.contains("cli-bin"));
         assert!(crates.body.contains("Workspace deps"));
@@ -536,7 +591,7 @@ mod tests {
         let features = plan
             .pages
             .iter()
-            .find(|p| p.file_name == "features.html")
+            .find(|p| p.slug == "features")
             .expect("features page");
         assert!(features.body.contains("fast"));
         assert!(features.body.contains("dep:serde"));
@@ -551,10 +606,10 @@ mod tests {
         )
         .expect("parses");
         let plan = plan("solo", "A library.", &solo);
-        let names: Vec<&str> = plan.pages.iter().map(|p| p.file_name.as_str()).collect();
+        let names: Vec<&str> = plan.pages.iter().map(|p| p.slug.as_str()).collect();
         assert_eq!(
             names,
-            vec!["index.html", "crates.html"],
+            vec!["index", "crates"],
             "no binaries, features, or internal edges means no such pages"
         );
     }
@@ -568,8 +623,70 @@ mod tests {
     fn nav_matches_page_order() {
         let plan = plan("demo", "A demo.", &sample());
         let nav = plan.nav();
-        assert_eq!(nav[0], ("Overview", "index.html"));
-        assert_eq!(nav[1], ("Architecture", "architecture.html"));
+        assert_eq!(nav[0], ("Overview", "index"));
+        assert_eq!(nav[1], ("Architecture", "architecture"));
         assert_eq!(nav.len(), plan.pages.len());
+    }
+
+    #[test]
+    fn landing_page_stays_at_the_root_and_others_become_subpages() {
+        let plan = plan("demo", "A demo.", &sample());
+        let paths: Vec<String> = plan.pages.iter().map(|p| p.output_path()).collect();
+        assert_eq!(
+            paths,
+            vec![
+                "index.html",
+                "architecture/index.html",
+                "crates/index.html",
+                "features/index.html",
+                "commands/index.html",
+            ],
+            "the landing URL other sites link to must not move"
+        );
+    }
+
+    #[test]
+    fn links_are_clean_urls_relative_to_the_linking_page() {
+        let plan = plan("demo", "A demo.", &sample());
+        let landing = plan.landing();
+        let crates = plan.pages.iter().find(|p| p.slug == "crates").unwrap();
+
+        // From the landing page, siblings need no prefix.
+        assert_eq!(landing.href_to(crates), "crates/");
+        assert_eq!(landing.href_to(landing), "./");
+        assert_eq!(landing.asset_prefix(), "");
+
+        // From a subpage, everything climbs out first.
+        assert_eq!(crates.href_to(landing), "../");
+        assert_eq!(
+            crates.href_to(
+                plan.pages
+                    .iter()
+                    .find(|p| p.slug == "architecture")
+                    .unwrap()
+            ),
+            "../architecture/"
+        );
+        assert_eq!(crates.asset_prefix(), "../");
+    }
+
+    #[test]
+    fn architecture_diagram_climbs_to_the_site_root() {
+        let plan = plan("demo", "A demo.", &sample());
+        let architecture = plan
+            .pages
+            .iter()
+            .find(|p| p.slug == "architecture")
+            .expect("architecture page");
+        assert!(
+            architecture
+                .body
+                .contains(r#"srcset="../diagrams/architecture.print.svg""#)
+        );
+        assert!(
+            architecture
+                .body
+                .contains(r#"src="../diagrams/architecture.svg""#)
+        );
     }
 }

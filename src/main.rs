@@ -34,6 +34,8 @@ struct RunSummary {
     name: String,
     target_dir: PathBuf,
     files: Vec<PathBuf>,
+    /// Stale outputs this run deleted, so a refresh never hides what it removed.
+    removed: Vec<PathBuf>,
     preset: Preset,
 }
 
@@ -102,6 +104,7 @@ where
         name: spec.name,
         target_dir,
         files: files.into_iter().map(|file| file.path).collect(),
+        removed: Vec::new(),
         preset: spec.preset,
     })
 }
@@ -115,6 +118,12 @@ fn print_summary(summary: &RunSummary) {
     println!("files:");
     for path in &summary.files {
         println!("  - {}", display_path(path, &summary.target_dir));
+    }
+    if !summary.removed.is_empty() {
+        println!("removed:");
+        for path in &summary.removed {
+            println!("  - {}", display_path(path, &summary.target_dir));
+        }
     }
     println!("next steps:");
     if summary.preset == Preset::RepoSite {
@@ -214,14 +223,30 @@ fn generate_site(args: Vec<String>) -> Result<RunSummary, CliError> {
     let plan = sitegen::plan_with_docs(&name, &description, &metadata, &docs, &help);
     let site_dir = root.join("site");
     let mut written = Vec::new();
+    let mut removed = Vec::new();
     for page in &plan.pages {
         let document = render_page(page, &plan, &description);
-        let path = site_dir.join(&page.file_name);
-        std::fs::create_dir_all(&site_dir)
-            .map_err(|e| CliError::Site(format!("cannot create site/: {e}")))?;
+        let path = site_dir.join(page.output_path());
+        // A subpage lives in its own directory, so the parent has to exist
+        // before the file can be written into it.
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| CliError::Site(format!("cannot create site/: {e}")))?;
+        }
         std::fs::write(&path, document)
             .map_err(|e| CliError::Site(format!("cannot write {}: {e}", path.display())))?;
         written.push(path);
+
+        // Pages used to be written flat as `<slug>.html`. Removing exactly the
+        // path this generator used to own for this slug keeps a site from
+        // serving the same page at two URLs, which is what leaving them behind
+        // does. Nothing else in site/ is touched.
+        let legacy = site_dir.join(format!("{}.html", page.slug));
+        if page.slug != "index" && legacy.is_file() {
+            std::fs::remove_file(&legacy)
+                .map_err(|e| CliError::Site(format!("cannot remove {}: {e}", legacy.display())))?;
+            removed.push(legacy);
+        }
     }
 
     // Commit the diagram source the architecture page points at. The renders
@@ -263,22 +288,30 @@ fn generate_site(args: Vec<String>) -> Result<RunSummary, CliError> {
         name,
         target_dir: root.to_path_buf(),
         files: written,
+        removed,
         preset: Preset::RepoSite,
     })
 }
 
 /// Wrap a generated page body in the shared site's document chrome.
 fn render_page(page: &sitegen::Page, plan: &sitegen::SitePlan, description: &str) -> String {
+    // Every reference is relative to the page making it, so a subpage climbs
+    // out of its own directory and the landing page, which is at the site
+    // root, needs no prefix at all.
     let nav: String = plan
-        .nav()
+        .pages
         .iter()
-        .map(|(label, href)| {
-            let current = if *href == page.file_name {
+        .map(|target| {
+            let current = if target.slug == page.slug {
                 r#" aria-current="page""#
             } else {
                 ""
             };
-            format!("      <a href=\"{href}\"{current}>{label}</a>\n")
+            format!(
+                "      <a href=\"{}\"{current}>{}</a>\n",
+                page.href_to(target),
+                target.nav_label
+            )
         })
         .collect();
 
@@ -292,12 +325,12 @@ fn render_page(page: &sitegen::Page, plan: &sitegen::SitePlan, description: &str
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="{description}">
     <title>{title}</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="{asset}style.css">
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <nav class="nav" aria-label="Primary">
-      <a href="index.html" class="brand">{brand}</a>
+      <a href="{home}" class="brand">{brand}</a>
 {nav}    </nav>
 
     <main id="main">
@@ -308,6 +341,8 @@ fn render_page(page: &sitegen::Page, plan: &sitegen::SitePlan, description: &str
         description = html_escape(description),
         title = html_escape(&page.title),
         brand = html_escape(&plan.project),
+        asset = page.asset_prefix(),
+        home = page.href_to(plan.landing()),
         nav = nav,
         body = page.body,
     )
